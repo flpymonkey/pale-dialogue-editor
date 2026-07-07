@@ -53,6 +53,8 @@ export function Editor({ id }: { id: string }) {
   const [rightTab, setRightTab] = useState<"inspect" | "play">("inspect");
   const [mode, setMode] = useState<StorageMode>("local");
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
+  const [leftOpen, setLeftOpen] = useState(false);
+  const [rightOpen, setRightOpen] = useState(false);
   const firstLoad = useRef(true);
   const addCount = useRef(0);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
@@ -183,6 +185,15 @@ export function Editor({ id }: { id: string }) {
     setSelEdge(null);
   }
 
+  // On mobile the side panels are drawers — only one open at a time so the
+  // canvas is never fully obscured by both at once.
+  function toggleLeftPanel() {
+    setLeftOpen((o) => { const next = !o; if (next) setRightOpen(false); return next; });
+  }
+  function toggleRightPanel() {
+    setRightOpen((o) => { const next = !o; if (next) setLeftOpen(false); return next; });
+  }
+
   if (graph === null) {
     return (
       <div className="wrap">
@@ -197,6 +208,7 @@ export function Editor({ id }: { id: string }) {
   return (
     <div className="editor">
       <div className="topbar">
+        <button className="mobile-toggle" onClick={toggleLeftPanel} title="Add node / Variables">☰</button>
         <Link href="/" style={{ textDecoration: "none" }}><button>←</button></Link>
         <input
           value={graph.title}
@@ -208,13 +220,18 @@ export function Editor({ id }: { id: string }) {
           {saving === "saving" ? "saving…" : saving === "saved" ? "✓ saved" : ""}
         </span>
         <div className="spacer" />
-        <button className={rightTab === "play" ? "primary" : ""} onClick={() => setRightTab(rightTab === "play" ? "inspect" : "play")}>
+        <button
+          className={rightTab === "play" ? "primary" : ""}
+          onClick={() => { setRightTab(rightTab === "play" ? "inspect" : "play"); setRightOpen(true); setLeftOpen(false); }}
+        >
           ▶ Playtest
         </button>
+        <button className="mobile-toggle" onClick={toggleRightPanel} title="Inspector">⚙</button>
       </div>
 
       <div className="editor-body">
-        <div className="side left">
+        <div className={`side left ${leftOpen ? "open" : ""}`}>
+          <button className="side-close-btn" onClick={() => setLeftOpen(false)}>✕ Close</button>
           <div className="section-title">Add node</div>
           <button className="node-btn" onClick={() => addNode("line")}>＋ Line (speech)</button>
           <button className="node-btn" onClick={() => addNode("hub")}>＋ Choice hub</button>
@@ -231,8 +248,8 @@ export function Editor({ id }: { id: string }) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onNodeClick={(_, n) => { setSelNode(n.id); setSelEdge(null); setRightTab("inspect"); }}
-            onEdgeClick={(_, e) => { setSelEdge(e.id); setSelNode(null); setRightTab("inspect"); }}
+            onNodeClick={(_, n) => { setSelNode(n.id); setSelEdge(null); setRightTab("inspect"); setRightOpen(true); setLeftOpen(false); }}
+            onEdgeClick={(_, e) => { setSelEdge(e.id); setSelNode(null); setRightTab("inspect"); setRightOpen(true); setLeftOpen(false); }}
             onPaneClick={() => { setSelNode(null); setSelEdge(null); }}
             onInit={(inst) => { rfInstance.current = inst; }}
             fitView
@@ -244,7 +261,15 @@ export function Editor({ id }: { id: string }) {
           </ReactFlow>
         </div>
 
-        <div className="side">
+        {(leftOpen || rightOpen) && (
+          <div
+            className="mobile-backdrop show"
+            onClick={() => { setLeftOpen(false); setRightOpen(false); }}
+          />
+        )}
+
+        <div className={`side ${rightOpen ? "open" : ""}`}>
+          <button className="side-close-btn" onClick={() => setRightOpen(false)}>✕ Close</button>
           {rightTab === "play" ? (
             <Playtest graph={graph} />
           ) : selectedNode ? (
