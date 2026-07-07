@@ -107,6 +107,15 @@ export function NodeInspector({
 }) {
   const d = node.data;
   const nodeOptions = graph.nodes.filter((n) => n.id !== node.id);
+  const connectedNodes = [
+    ...new Map(
+      graph.edges
+        .filter((e) => e.source === node.id)
+        .map((e) => graph.nodes.find((n) => n.id === e.target))
+        .filter((n): n is DialogueNode => !!n)
+        .map((n) => [n.id, n] as const)
+    ).values(),
+  ];
 
   return (
     <div>
@@ -117,12 +126,18 @@ export function NodeInspector({
           {node.type === "line" && (
             <>
               <label>Speaker</label>
-              <input list="speakers" value={d.speaker || ""} onChange={(e) => onPatch({ speaker: e.target.value })} />
-              <datalist id="speakers">
-                {SKILLS.map((s) => <option key={s} value={s.toUpperCase()} />)}
-                <option value="Kim Kitsuragi" />
-                <option value="You" />
-              </datalist>
+              <select value={d.speaker || ""} onChange={(e) => onPatch({ speaker: e.target.value })}>
+                <option value="">(none)</option>
+                {!graph.speakers?.some((s) => s.name === d.speaker) && d.speaker && (
+                  <option value={d.speaker}>{d.speaker} (undefined)</option>
+                )}
+                {(graph.speakers ?? []).map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+              </select>
+              {!graph.speakers?.length && (
+                <div className="mini" style={{ marginTop: 4 }}>
+                  No speakers yet — add one in the left panel under &quot;Speakers&quot;.
+                </div>
+              )}
             </>
           )}
           <label>{node.type === "hub" ? "Prompt (optional)" : "Text"}</label>
@@ -146,13 +161,24 @@ export function NodeInspector({
           <label>On success → node</label>
           <select value={d.successTarget || ""} onChange={(e) => onPatch({ successTarget: e.target.value })}>
             <option value="">(none)</option>
-            {nodeOptions.map((n) => <option key={n.id} value={n.id}>{label(n)}</option>)}
+            {!connectedNodes.some((n) => n.id === d.successTarget) && d.successTarget && (
+              <option value={d.successTarget}>(disconnected node)</option>
+            )}
+            {connectedNodes.map((n) => <option key={n.id} value={n.id}>{label(n)}</option>)}
           </select>
           <label>On failure → node</label>
           <select value={d.failTarget || ""} onChange={(e) => onPatch({ failTarget: e.target.value })}>
             <option value="">(none)</option>
-            {nodeOptions.map((n) => <option key={n.id} value={n.id}>{label(n)}</option>)}
+            {!connectedNodes.some((n) => n.id === d.failTarget) && d.failTarget && (
+              <option value={d.failTarget}>(disconnected node)</option>
+            )}
+            {connectedNodes.map((n) => <option key={n.id} value={n.id}>{label(n)}</option>)}
           </select>
+          {!connectedNodes.length && (
+            <div className="mini" style={{ marginTop: 4 }}>
+              Drag a connection from this node to another node on the canvas to make it selectable here.
+            </div>
+          )}
         </>
       )}
 

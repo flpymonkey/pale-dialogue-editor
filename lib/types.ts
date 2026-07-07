@@ -69,6 +69,11 @@ export interface VariableDef {
   initial: string;
 }
 
+export interface SpeakerDef {
+  name: string;
+  color: string; // hex color used for this speaker's label and node border
+}
+
 export interface DialogueGraph {
   id: string;
   title: string;
@@ -77,6 +82,7 @@ export interface DialogueGraph {
   nodes: DialogueNode[];
   edges: DialogueEdge[];
   variables: VariableDef[];
+  speakers: SpeakerDef[];
   skills: Partial<Record<Skill, number>>; // starting skill levels for playtest
 }
 
@@ -110,6 +116,11 @@ export function emptyGraph(id: string, title: string): DialogueGraph {
     edges: [],
     variables: [
       { name: "metKim", type: "bool", initial: "false" },
+    ],
+    speakers: [
+      { name: "INLAND EMPIRE", color: "#4b8c9c" },
+      { name: "You", color: "#d6d3c8" },
+      { name: "Kim Kitsuragi", color: "#c9a24b" },
     ],
     skills: { Logic: 3, "Inland Empire": 4, Empathy: 2, Authority: 2 },
   };

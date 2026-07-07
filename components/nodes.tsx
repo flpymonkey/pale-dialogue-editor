@@ -6,10 +6,13 @@ import type { DialogueNode } from "@/lib/types";
 type Data = DialogueNode["data"];
 
 function Shell({
-  cls, selected, children,
-}: { cls: string; selected: boolean; children: React.ReactNode }) {
+  cls, selected, borderColor, children,
+}: { cls: string; selected: boolean; borderColor?: string; children: React.ReactNode }) {
   return (
-    <div className={`rf-node ${cls} ${selected ? "selected" : ""}`}>
+    <div
+      className={`rf-node ${cls} ${selected ? "selected" : ""}`}
+      style={borderColor ? { borderLeftColor: borderColor } : undefined}
+    >
       <Handle type="target" position={Position.Top} />
       {children}
       <Handle type="source" position={Position.Bottom} />
@@ -18,10 +21,10 @@ function Shell({
 }
 
 export function LineNode({ data, selected }: NodeProps) {
-  const d = data as Data;
+  const d = data as Data & { speakerColor?: string };
   return (
-    <Shell cls="type-line" selected={!!selected}>
-      <div className="speaker" style={{ color: "var(--accent-2)" }}>
+    <Shell cls="type-line" selected={!!selected} borderColor={d.speakerColor}>
+      <div className="speaker" style={{ color: d.speakerColor || "var(--accent-2)" }}>
         {d.speaker || "Narrator"}
         {d.isStart && <span className="badge start-badge" style={{ marginLeft: 6 }}>START</span>}
       </div>

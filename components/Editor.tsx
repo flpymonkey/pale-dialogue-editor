@@ -6,7 +6,7 @@ import {
   ReactFlow, Background, Controls, MiniMap,
   applyNodeChanges, applyEdgeChanges, addEdge,
   type Node, type Edge, type Connection,
-  type NodeChange, type EdgeChange,
+  type NodeChange, type EdgeChange, type ReactFlowInstance,
 } from "@xyflow/react";
 import { nodeTypes } from "./nodes";
 import { NodeInspector, EdgeInspector } from "./Inspector";
@@ -17,13 +17,25 @@ import type { DialogueGraph, DialogueNode, NodeType } from "@/lib/types";
 
 const uid = (p: string) => p + Math.random().toString(36).slice(2, 8);
 
-function toRfNodes(g: DialogueGraph): Node[] {
-  return g.nodes.map((n) => ({
-    id: n.id,
-    type: n.type,
-    position: n.position,
-    data: n.data as unknown as Record<string, unknown>,
-  }));
+function toRfNodes(
+  g: DialogueGraph,
+  selectedId?: string | null,
+  measured?: Map<string, { width: number; height: number }>
+): Node[] {
+  return g.nodes.map((n) => {
+    const speakerColor = g.speakers?.find((s) => s.name === n.data.speaker)?.color;
+    return {
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      data: { ...(n.data as unknown as Record<string, unknown>), speakerColor },
+      selected: n.id === selectedId,
+      // Preserve React Flow's measured size across reconciliation — without
+      // this, adoptUserNodes() resets it to undefined on every state update,
+      // which permanently sticks the node at `visibility: hidden`.
+      ...(measured?.get(n.id) ? { measured: measured.get(n.id) } : {}),
+    };
+  });
 }
 function toRfEdges(g: DialogueGraph): Edge[] {
   return g.edges.map((e) => ({
@@ -43,13 +55,27 @@ export function Editor({ id }: { id: string }) {
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
   const firstLoad = useRef(true);
   const addCount = useRef(0);
+  const rfInstance = useRef<ReactFlowInstance | null>(null);
+  const measuredRef = useRef(new Map<string, { width: number; height: number }>());
 
   useEffect(() => {
     loadDialogue(id).then((g) => {
-      if (g) setGraph(g);
-      else setGraph(null);
+      if (g) {
+        setGraph({ ...g, speakers: g.speakers ?? [] });
+        const start = g.nodes.find((n) => n.data.isStart) ?? g.nodes[0];
+        setSelNode(start ? start.id : null);
+      } else {
+        setGraph(null);
+      }
     });
   }, [id]);
+
+  // ReactFlow's `fitView` prop only fits once, at init — but the graph loads
+  // asynchronously so there are no nodes yet at that point. Re-fit once the
+  // real nodes are in, or they can end up positioned outside the viewport.
+  useEffect(() => {
+    if (graph) rfInstance.current?.fitView({ padding: 0.2 });
+  }, [graph?.id]);
 
   // Debounced autosave whenever the graph changes (skip initial load).
   useEffect(() => {
@@ -64,13 +90,21 @@ export function Editor({ id }: { id: string }) {
     return () => clearTimeout(t);
   }, [graph]);
 
-  const rfNodes = useMemo(() => (graph ? toRfNodes(graph) : []), [graph]);
+  const rfNodes = useMemo(
+    () => (graph ? toRfNodes(graph, selNode, measuredRef.current) : []),
+    [graph, selNode]
+  );
   const rfEdges = useMemo(() => (graph ? toRfEdges(graph) : []), [graph]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
+    for (const c of changes) {
+      if (c.type === "dimensions" && c.dimensions) {
+        measuredRef.current.set(c.id, c.dimensions);
+      }
+    }
     setGraph((g) => {
       if (!g) return g;
-      const next = applyNodeChanges(changes, toRfNodes(g));
+      const next = applyNodeChanges(changes, toRfNodes(g, null, measuredRef.current));
       const ids = new Set(next.map((n) => n.id));
       const posMap = new Map(next.map((n) => [n.id, n.position]));
       const nodes = g.nodes
@@ -200,6 +234,7 @@ export function Editor({ id }: { id: string }) {
             onNodeClick={(_, n) => { setSelNode(n.id); setSelEdge(null); setRightTab("inspect"); }}
             onEdgeClick={(_, e) => { setSelEdge(e.id); setSelNode(null); setRightTab("inspect"); }}
             onPaneClick={() => { setSelNode(null); setSelEdge(null); }}
+            onInit={(inst) => { rfInstance.current = inst; }}
             fitView
             proOptions={{ hideAttribution: true }}
           >
